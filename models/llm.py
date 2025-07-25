@@ -109,7 +109,7 @@ class LLMManager:
     def _plan_with_local(self, request: str, chat_history=None) -> dict:
         prompt = self._get_prompt(request, local=True, chat_history=chat_history)
         try:
-            # Use Popen for streaming output
+            # Run ollama and capture the complete response
             process = subprocess.Popen(
                 ["ollama", "run", "llama3.2:3b"],
                 stdin=subprocess.PIPE,
@@ -123,12 +123,10 @@ class LLMManager:
             process.stdin.write(prompt)
             process.stdin.close()
             
-            # Stream output
-            output = ""
-            for line in process.stdout:
-                print(line, end='', flush=True)  # Print streaming response
-                output += line
-                
+            # Read full output without printing line by line to avoid
+            # duplicate messages in the CLI
+            output = process.stdout.read()
+
             process.stdout.close()
             process.wait(timeout=60)
             
@@ -160,19 +158,17 @@ class LLMManager:
         messages.append({"role": "user", "content": prompt})
         
         try:
-            # Use streaming for real-time output
+            # Request completion and capture the full response without printing
             output = ""
             for chunk in openai.chat.completions.create(
                 model="gpt-4.1-2025-04-14",
                 messages=messages,
                 temperature=0.2,
                 max_tokens=512,
-                stream=True  # Enable streaming
+                stream=True
             ):
                 if chunk.choices[0].delta.content is not None:
-                    content = chunk.choices[0].delta.content
-                    print(content, end='', flush=True)  # Print streaming response
-                    output += content
+                    output += chunk.choices[0].delta.content
                     
             plan = self._parse_plan_from_output(output.strip())
             return plan
@@ -210,12 +206,13 @@ TASK EXECUTION FLOW:
 1. Begin every response with a short message from you.
 2. After your text, output EXACTLY ONE tool command as JSON.
 3. Continue executing one tool at a time until the task is fully complete.
-4. When finished, provide a final summary message and output {{"tool": "none", "args": {{}}}}.
+4. Make sure to use a tool in EVERY response until the task is truly complete.
+5. When the task is complete, write your final summary, then output {{"tool": "none", "args": {{}}}}.
 
 KEY POINTS:
 1. Don't stop until the task is actually finished
 2. Treat every tool result or user reply as a new message in the conversation (but not as a task)
-3. Each response = ONE tool command as JSON
+3. Each response = ONE tool command as JSON and your message MUST come before it
 4. Wait for real output before the next step
 5. Keep messages brief but informative
 6. Share progress updates in your text as needed
@@ -241,10 +238,12 @@ Examples of good progress updates:
             "3. Never combine multiple actions - do one step at a time.\n"
             "4. Do not invent tool names or argument names.\n"
             "5. Provide progress updates in your text as needed.\n"
-            "6. Finish with a summary message and the JSON {{\"tool\": \"none\", \"args\": {{}}}} when done.\n"
+            "6. Finish with a summary in your text, then output the JSON {\"tool\": \"none\", \"args\": {{}}} when done.\n"
             "7. Use the 'none' tool only when no further action is needed.\n"
             "8. Treat each user message as a NEW instruction; use chat history only as context.\n"
-            "9. Tool outputs appear as their own messages; don't confuse them with the user's request.\n\n"
+            "9. Tool outputs appear as their own messages; don't confuse them with the user's request.\n"
+            "10. Always use a tool in every response until the task is complete.\n"
+            "11. Your short message must come BEFORE the JSON tool.\n\n"
             "Example JSON:\n"
             '{"tool": "tool_name", "args": {"arg_name": "value"}}\n\n'
             "Always gather necessary information before acting."

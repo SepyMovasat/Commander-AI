@@ -83,7 +83,9 @@ def run_agent_cli(agent, new_session=False):
         message = plan.get('message')
         if message:
             console.print(f"[bold cyan]AI:[/bold cyan] {message}")
-        tool = plan.get('tool','?')
+            chat_history.append({"role": "assistant", "content": message})
+        tool = plan.get('tool', '?')
+        desc = plan.get('ui', {}).get('description', '')
         # Show tool execution or AI response
         if tool == 'inquiry':
             result = agent.execute_plan(plan, user_input)
@@ -100,10 +102,11 @@ def run_agent_cli(agent, new_session=False):
             else:
                 console.print(f"[bold cyan]AI:[/bold cyan] {result}")
         elif tool != 'none' and tool != '?':
-            console.print(f"[bold yellow]Planned tool:[/bold yellow] [bold cyan]{tool}[/bold cyan]")
-            with console.status(f"[bold green]Executing: {tool}[/bold green]", spinner="bouncingBar"):
+            display = desc or f"Executing {tool}"
+            console.print(f"[bold yellow]{display}[/bold yellow]")
+            with console.status(f"[bold green]{display}[/bold green]", spinner="bouncingBar"):
                 result = agent.execute_plan(plan, user_input)
-            console.print(f"[bold green]Executed:[/bold green] [bold cyan]{tool}[/bold cyan]")
+            console.print(f"[bold green]Done:[/bold green] [bold cyan]{tool}[/bold cyan]")
         else:
             with console.status("[bold green]Processing...[/bold green]", spinner="bouncingBar"):
                 result = agent.execute_plan(plan, user_input)
@@ -120,7 +123,9 @@ def run_agent_cli(agent, new_session=False):
             followup_message = followup_plan.get('message')
             if followup_message:
                 console.print(f"[bold cyan]AI:[/bold cyan] {followup_message}")
-            followup_tool = followup_plan.get('tool','?')
+                chat_history.append({"role": "assistant", "content": followup_message})
+            followup_tool = followup_plan.get('tool', '?')
+            followup_desc = followup_plan.get('ui', {}).get('description', '')
             if followup_tool == 'inquiry':
                 followup_result = agent.execute_plan(followup_plan, user_input)
                 if isinstance(followup_result, dict) and followup_result.get('__type') == 'inquiry':
@@ -134,18 +139,19 @@ def run_agent_cli(agent, new_session=False):
                     chat_history.append({"role": "tool", "content": str(result)})
                     if plan.get('message'):
                         console.print(f"[bold cyan]AI:[/bold cyan] {plan['message']}")
+                        chat_history.append({"role": "assistant", "content": plan['message']})
                     # Update the plan and result for the outer loop
                     plan = followup_plan
                     result = followup_result
                 else:
                     console.print(f"[bold cyan]AI:[/bold cyan] {followup_result}")
             elif followup_tool != 'none' and followup_tool != '?':
-                # Execute tool
-                console.print(f"[bold yellow]Planned tool:[/bold yellow] [bold cyan]{followup_tool}[/bold cyan]")
-                with console.status(f"[bold green]Executing: {followup_tool}[/bold green]", spinner="bouncingBar"):
+                display = followup_desc or f"Executing {followup_tool}"
+                console.print(f"[bold yellow]{display}[/bold yellow]")
+                with console.status(f"[bold green]{display}[/bold green]", spinner="bouncingBar"):
                     followup_result = agent.execute_plan(followup_plan, user_input)
                 chat_history.append({"role": "tool", "content": str(followup_result)})
-                console.print(f"[bold green]Executed:[/bold green] [bold cyan]{followup_tool}[/bold cyan]")
+                console.print(f"[bold green]Done:[/bold green] [bold cyan]{followup_tool}[/bold cyan]")
             else:
                 with console.status("[bold green]Processing...[/bold green]", spinner="bouncingBar"):
                     followup_result = agent.execute_plan(followup_plan, user_input)
@@ -153,10 +159,7 @@ def run_agent_cli(agent, new_session=False):
             
             plan, result = followup_plan, followup_result
         
-        # Show final message if provided
-        if plan.get('message'):
-            console.print(f"[bold cyan]AI:[/bold cyan] {plan['message']}")
-            chat_history.append({"role": "assistant", "content": plan['message']})
+        # Final message is already printed when received
         # Save chat history after each turn
         chat_history.append({"role": "user", "content": user_input})
         chat_history.append({"role": "llm_plan", "content": str(plan)})

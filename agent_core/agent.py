@@ -43,11 +43,9 @@ class Agent:
         # Always return a string: just return the result (direct_answer, inquiry, etc.)
         if not chat_history or not result:
             return 'No response from AI.'
-        # If the plan/tool is 'none' return any summary or message
+        # If the plan/tool is 'none' return any final message
         if plan.get('tool') == 'none':
             args = plan.get('args', {})
-            if 'summary' in args:
-                return args['summary']
             if 'text' in args:
                 return args['text']
             if 'message' in plan:
@@ -88,7 +86,7 @@ class Agent:
             f"You just executed the tool '{last_plan.get('tool')}' with result: {last_result}\n"
             "Treat this tool result as a new message in the conversation."
             " If the overall task is not yet complete, plan the next step as a single JSON object (tool+args). "
-            "When the task is fully done, return a JSON with tool:'none' and include a brief summary in args.summary. "
+            "When the task is fully done, provide your final summary and then return a JSON with tool:'none' and empty args. "
             "Remember: output exactly one JSON object and nothing else."
         )
 
