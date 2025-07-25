@@ -92,7 +92,7 @@ class LLMManager:
         # Direct answer shortcut (if question is simple)
         if self._is_simple_question(request):
             answer = self.answer_question(request)
-            return {"tool": "echo", "args": {"text": answer}}
+            return {"tool": "none", "args": {}, "message": answer}
             
         # Try local LLM first, fallback to API if needed
         plan = self._plan_with_local(request, chat_history=chat_history)
@@ -207,10 +207,10 @@ CRITICAL: Never invent or imagine file paths, outputs, or responses - you are wo
 USER REQUEST: {request}
 
 TASK EXECUTION FLOW:
-1. ALWAYS start with 'echo' acknowledging the task
-2. Continue executing ONE tool at a time until the task is FULLY complete
-3. Use 'echo' for important milestones (but not too frequently)
-4. ALWAYS end with 'echo' summarizing the complete result the user wanted
+1. Begin every response with a short message from you.
+2. After your text, output EXACTLY ONE tool command as JSON.
+3. Continue executing one tool at a time until the task is fully complete.
+4. When finished, provide a final summary message and output {{"tool": "none", "args": {{}}}}.
 
 KEY POINTS:
 1. Don't stop until the task is actually finished
@@ -218,10 +218,9 @@ KEY POINTS:
 3. Each response = ONE tool command as JSON
 4. Wait for real output before the next step
 5. Keep messages brief but informative
-6. Echo milestones that show real progress
-7. Final echo must include what the user wanted to know or do
+6. Share progress updates in your text as needed
 
-Examples of good echo timing:
+Examples of good progress updates:
 ✓ "I'll help you find large files in the system"
 ✓ "Found potential large files, now checking their exact sizes"
 ✓ "Complete! Found 3 files over 1GB: [actual file list]"
@@ -237,12 +236,12 @@ Examples of good echo timing:
             "You are operating in a REAL Linux environment - not a simulation. "
             "Follow these CRITICAL rules exactly:\n\n"
             "CORE RULES:\n"
-            "1. ALWAYS start with an 'echo' acknowledging the task.\n"
-            "2. Output EXACTLY ONE tool command per response as JSON.\n"
+            "1. Start every response with a short message from you.\n"
+            "2. After your message, output EXACTLY ONE tool command as JSON.\n"
             "3. Never combine multiple actions - do one step at a time.\n"
             "4. Do not invent tool names or argument names.\n"
-            "5. Use 'echo' for important updates during tasks.\n"
-            "6. ALWAYS end with an 'echo' summarizing what was done.\n"
+            "5. Provide progress updates in your text as needed.\n"
+            "6. Finish with a summary message and the JSON {{\"tool\": \"none\", \"args\": {{}}}} when done.\n"
             "7. Use the 'none' tool only when no further action is needed.\n"
             "8. Treat each user message as a NEW instruction; use chat history only as context.\n"
             "9. Tool outputs appear as their own messages; don't confuse them with the user's request.\n\n"
@@ -269,7 +268,6 @@ Examples of good echo timing:
             "Memory & Communication:\n"
             '{"tool": "memory_notepad_add", "args": {"note": "text"}} - Add note\n'
             '{"tool": "memory_rag_query", "args": {"query": "text"}} - Query memory\n'
-            '{"tool": "echo", "args": {"text": "message"}} - Send message\n'
             '{"tool": "inquiry", "args": {"text": "question"}} - Ask user\n'
             '{"tool": "none", "args": {}} - No action needed\n'
         )
@@ -323,13 +321,16 @@ Examples of good echo timing:
         return ""
 
     def _parse_plan_from_output(self, output: str) -> dict:
-        # Try to extract JSON from output
+        """Extract a JSON plan and any accompanying text."""
         try:
             start = output.find('{')
             end = output.rfind('}') + 1
             if start != -1 and end != -1:
-                return json.loads(output[start:end])
+                plan = json.loads(output[start:end])
+                text = (output[:start] + output[end:]).strip()
+                if text:
+                    plan['message'] = text
+                return plan
         except Exception:
             pass
-        # Fallback: echo
-        return {"tool": "echo", "args": {"text": output}}
+        return {"tool": "none", "args": {}, "message": output}

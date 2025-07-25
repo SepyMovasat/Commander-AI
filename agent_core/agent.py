@@ -40,20 +40,22 @@ class Agent:
             self.memory['last_request'] = request
             self.memory['last_plan'] = plan if 'plan' in locals() else None
             memory.save_memory(self.memory)
-        # Always return a string: just return the result (echo, direct_answer, inquiry, etc.)
+        # Always return a string: just return the result (direct_answer, inquiry, etc.)
         if not chat_history or not result:
             return 'No response from AI.'
-        # If the plan/tool is 'none' but args has 'summary' or 'text', treat as echo
+        # If the plan/tool is 'none' return any summary or message
         if plan.get('tool') == 'none':
             args = plan.get('args', {})
             if 'summary' in args:
                 return args['summary']
             if 'text' in args:
                 return args['text']
+            if 'message' in plan:
+                return plan['message']
         return str(result)
 
     def _robust_parse_plan(self, plan):
-        """If plan is not a dict or is a string, try to parse it as JSON or fallback to echo."""
+        """If plan is not a dict or is a string, try to parse it as JSON."""
         import ast, json
         if isinstance(plan, dict):
             return plan
@@ -66,8 +68,8 @@ class Agent:
                     # Try Python dict literal
                     return ast.literal_eval(plan)
                 except Exception:
-                    return {"tool": "echo", "args": {"text": plan}}
-        return {"tool": "echo", "args": {"text": str(plan)}}
+                    return {"tool": "none", "args": {}, "message": plan}
+        return {"tool": "none", "args": {}, "message": str(plan)}
 
     def _should_continue(self, plan, result):
         # If the LLM says it's done, or the plan is 'none', stop. Otherwise, continue.
@@ -165,9 +167,6 @@ class Agent:
                 if question:
                     return self.llm.answer_question(question)
                 return "Missing question."
-            elif tool == 'echo':
-                text = args.get('text')
-                return text if text else 'No response from AI.'
             elif tool == 'inquiry':
                 inquiry = args.get('question') or args.get('inquiry') or args.get('text')
                 if not inquiry:
