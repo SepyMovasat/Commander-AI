@@ -80,13 +80,12 @@ def run_agent_cli(agent, new_session=False):
         model = "OpenAI GPT-4" if agent.llm.use_api and agent.llm.api_key else "Ollama (local LLM)"
         with console.status(f"[bold yellow]Planning next action using {model}...[/bold yellow]", spinner="dots"):
             plan = agent.llm.plan(user_input, chat_history)
+        message = plan.get('message')
+        if message:
+            console.print(f"[bold cyan]AI:[/bold cyan] {message}")
         tool = plan.get('tool','?')
         # Show tool execution or AI response
-        if tool == 'echo':
-            with console.status("[bold green]Processing AI response...[/bold green]", spinner="bouncingBar"):
-                result = agent.execute_plan(plan, user_input)
-            console.print(f"[bold cyan]AI:[/bold cyan] {result}")
-        elif tool == 'inquiry':
+        if tool == 'inquiry':
             result = agent.execute_plan(plan, user_input)
             if isinstance(result, dict) and result.get('__type') == 'inquiry':
                 console.print(f"[bold cyan]AI:[/bold cyan] {result['text']}")
@@ -97,8 +96,6 @@ def run_agent_cli(agent, new_session=False):
                 result = agent.execute_plan(plan, user_response)
                 chat_history.append({"role": "llm_plan", "content": str(plan)})
                 chat_history.append({"role": "tool", "content": str(result)})
-                if plan.get('tool') == 'echo' and result and isinstance(result, str) and result.strip():
-                    console.print(f"[bold cyan]AI:[/bold cyan] {result}")
                 continue
             else:
                 console.print(f"[bold cyan]AI:[/bold cyan] {result}")
@@ -120,14 +117,11 @@ def run_agent_cli(agent, new_session=False):
                 followup_plan = agent._robust_parse_plan(agent.llm._plan_with_api(followup_prompt, chat_history))
                 chat_history.append({"role": "llm_followup_plan", "content": str(followup_plan)})
             
+            followup_message = followup_plan.get('message')
+            if followup_message:
+                console.print(f"[bold cyan]AI:[/bold cyan] {followup_message}")
             followup_tool = followup_plan.get('tool','?')
-            if followup_tool == 'echo':
-                with console.status("[bold green]Processing AI response...[/bold green]", spinner="bouncingBar"):
-                    followup_result = agent.execute_plan(followup_plan, user_input)
-                chat_history.append({"role": "assistant", "content": followup_result})
-                # Show AI response
-                console.print(f"[bold cyan]AI:[/bold cyan] {followup_result}")
-            elif followup_tool == 'inquiry':
+            if followup_tool == 'inquiry':
                 followup_result = agent.execute_plan(followup_plan, user_input)
                 if isinstance(followup_result, dict) and followup_result.get('__type') == 'inquiry':
                     console.print(f"[bold cyan]AI:[/bold cyan] {followup_result['text']}")
@@ -138,8 +132,8 @@ def run_agent_cli(agent, new_session=False):
                     result = agent.execute_plan(plan, user_response)
                     chat_history.append({"role": "llm_plan", "content": str(plan)})
                     chat_history.append({"role": "tool", "content": str(result)})
-                    if plan.get('tool') == 'echo' and result and isinstance(result, str) and result.strip():
-                        console.print(f"[bold cyan]AI:[/bold cyan] {result}")
+                    if plan.get('message'):
+                        console.print(f"[bold cyan]AI:[/bold cyan] {plan['message']}")
                     # Update the plan and result for the outer loop
                     plan = followup_plan
                     result = followup_result
@@ -159,10 +153,10 @@ def run_agent_cli(agent, new_session=False):
             
             plan, result = followup_plan, followup_result
         
-        # Show final result if it's an echo/response
-        if plan.get('tool') == 'echo' and result and result.strip():
-            console.print(f"[bold cyan]AI:[/bold cyan] {result}")
-            chat_history.append({"role": "assistant", "content": result})
+        # Show final message if provided
+        if plan.get('message'):
+            console.print(f"[bold cyan]AI:[/bold cyan] {plan['message']}")
+            chat_history.append({"role": "assistant", "content": plan['message']})
         # Save chat history after each turn
         chat_history.append({"role": "user", "content": user_input})
         chat_history.append({"role": "llm_plan", "content": str(plan)})
