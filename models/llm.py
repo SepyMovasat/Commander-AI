@@ -189,32 +189,37 @@ class LLMManager:
         # Format chat history if available
         history_context = ""
         if chat_history:
-            history_context = "\nPrevious conversation:\n"
+            history_context = "Previous conversation:\n"
             for entry in chat_history:
                 role = "User" if entry.get('role') == 'user' else "Assistant"
                 content = entry.get('content', '').strip()
                 if content:
                     history_context += f"{role}: {content}\n"
-        
+            history_context += "\n"  # separate from the new request
+
         return f"""
 You are an AI agent operating in a REAL Linux environment with REAL consequences. This is not a simulation.
 CRITICAL: Never invent or imagine file paths, outputs, or responses - you are working with actual files and systems.
-{history_context}
+
 {tool_desc}
+{history_context}Focus only on the NEW user request below. Use conversation history and tool outputs just for reference, handling one message at a time.
+
+USER REQUEST: {request}
 
 TASK EXECUTION FLOW:
 1. ALWAYS start with 'echo' acknowledging the task
 2. Continue executing ONE tool at a time until the task is FULLY complete
 3. Use 'echo' for important milestones (but not too frequently)
-4. ALWAYS end with 'echo' summarizing the complete result user wanted
+4. ALWAYS end with 'echo' summarizing the complete result the user wanted
 
 KEY POINTS:
-1. Don't stop until task is actually finished
-2. Each response = ONE tool command as JSON
-3. Wait for real output before next step
-4. Keep messages brief but informative
-5. Echo milestones that show real progress
-6. Final echo must include what user wanted to know/do
+1. Don't stop until the task is actually finished
+2. Treat every tool result or user reply as a new message in the conversation
+3. Each response = ONE tool command as JSON
+4. Wait for real output before the next step
+5. Keep messages brief but informative
+6. Echo milestones that show real progress
+7. Final echo must include what the user wanted to know or do
 
 Examples of good echo timing:
 ✓ "I'll help you find large files in the system"
@@ -225,26 +230,26 @@ Examples of good echo timing:
 "Searching directory..."
 "Checking next directory..."
 "Moving to next folder..."
-
-User request: {request}
 """
 
     def _system_prompt(self, api: bool) -> str:
         return (
-            "You are operating in a REAL Linux environment - not a simulation. Your responses MUST follow these CRITICAL rules:\n\n"
+            "You are operating in a REAL Linux environment - not a simulation. "
+            "Follow these CRITICAL rules exactly:\n\n"
             "CORE RULES:\n"
-            "1. ALWAYS start with an 'echo' command acknowledging the task\n"
-            "2. Output EXACTLY ONE tool command per response as JSON\n"
-            "3. Never combine multiple actions - do one step at a time\n"
-            "4. Never invent new tool names or modify argument names\n"
-            "5. Use 'echo' for important updates during tasks\n"
-            "6. ALWAYS end with an 'echo' summarizing what was done\n"
-            "7. Use 'none' tool only when you truly have nothing to do\n\n"
-            "Example response format:\n"
+            "1. ALWAYS start with an 'echo' acknowledging the task.\n"
+            "2. Output EXACTLY ONE tool command per response as JSON.\n"
+            "3. Never combine multiple actions - do one step at a time.\n"
+            "4. Do not invent tool names or argument names.\n"
+            "5. Use 'echo' for important updates during tasks.\n"
+            "6. ALWAYS end with an 'echo' summarizing what was done.\n"
+            "7. Use the 'none' tool only when no further action is needed.\n"
+            "8. Treat each user message as a NEW instruction; use chat history only as context.\n"
+            "9. Keep outputs short and clear.\n"
+            "10. Tool outputs appear as their own messages; don't confuse them with the user's request.\n\n"
+            "Example JSON:\n"
             '{"tool": "tool_name", "args": {"arg_name": "value"}}\n\n'
-            "Always get information first before taking action.\n"
-            "Break complex tasks into single steps.\n"
-            "Keep messages brief and clear."
+            "Always gather necessary information before acting."
         )
 
     def _tool_description(self) -> str:

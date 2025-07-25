@@ -23,7 +23,7 @@ class Agent:
             result = self.execute_plan(plan, request)
             chat_history.append({"role": "tool", "content": str(result)})
             # Agentic multi-step loop: keep reasoning until LLM says done
-            max_steps = 5
+            max_steps = 10
             steps = 0
             while self._should_continue(plan, result) and steps < max_steps:
                 steps += 1
@@ -84,7 +84,10 @@ class Agent:
         return (
             f"You are an autonomous AI agent. The user asked: '{user_request}'.\n"
             f"You just executed the tool '{last_plan.get('tool')}' with result: {last_result}\n"
-            "If the task is not complete, plan the next step as a single JSON object (tool+args). If the task is done, output a JSON with tool: 'none' and a summary in args.summary."
+            "Treat this tool result as a new message in the conversation."
+            " If the overall task is not yet complete, plan the next step as a single JSON object (tool+args). "
+            "When the task is fully done, return a JSON with tool:'none' and include a brief summary in args.summary. "
+            "Remember: output exactly one JSON object and nothing else."
         )
 
     def save_chat_history(self, chat_history):
