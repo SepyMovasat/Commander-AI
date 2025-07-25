@@ -9,3 +9,6 @@ env/
 
 # Ignore cache folder
 cache/
+
+# Ignore config.yaml file in config folder
+config/config.yaml
