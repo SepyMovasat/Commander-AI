@@ -1,0 +1,21 @@
+# Core
+openai>=1.0.0
+ollama
+requests
+pyyaml
+# System interaction
+pyautogui
+pynput
+psutil
+# OCR
+pytesseract
+Pillow
+# Web
+selenium
+playwright
+# CLI
+prompt_toolkit
+# Optional GUI
+PyQt5
+# Utils
+rich

@@ -1,0 +1,12 @@
+# Commander AI config
+# Set USE_API to true to enable API fallback (OpenAI, Gemini, etc.)
+USE_API: true
+# Path to local LLM (Ollama, llama.cpp, etc.)
+LOCAL_LLM: "ollama"
+# API keys (fill in as needed)
+OPENAI_API_KEY: ""
+GEMINI_API_KEY: ""
+CLAUDE_API_KEY: ""
+# Web search
+WEB_SEARCH_ENGINE: "duckduckgo"
+# Other config options...
