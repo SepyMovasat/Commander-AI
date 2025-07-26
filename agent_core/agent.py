@@ -12,23 +12,25 @@ class Agent:
     def __init__(self):
         self.llm = LLMManager()
         self.memory = memory.load_memory()
+        # Persist chat history across requests
+        self.chat_history = memory.load_chat_history()
 
     def handle_request(self, request: str) -> str:
         """Main entry for user requests. Implements agentic multi-step loop and saves chat history."""
-        chat_history = []
+        chat_history = self.chat_history
         try:
-            plan = self.llm.plan(request)
+            plan = self.llm.plan(request, chat_history)
             chat_history.append({"role": "user", "content": request})
             chat_history.append({"role": "llm_plan", "content": str(plan)})
             result = self.execute_plan(plan, request)
             chat_history.append({"role": "tool", "content": str(result)})
             # Agentic multi-step loop: keep reasoning until LLM says done
-            max_steps = 10
+            max_steps = 20
             steps = 0
             while self._should_continue(plan, result) and steps < max_steps:
                 steps += 1
                 followup_prompt = self._agentic_followup_prompt(request, plan, result)
-                followup_plan = self._robust_parse_plan(self.llm._plan_with_api(followup_prompt))
+                followup_plan = self._robust_parse_plan(self.llm._plan_with_api(followup_prompt, chat_history))
                 chat_history.append({"role": "llm_followup_plan", "content": str(followup_plan)})
                 followup_result = self.execute_plan(followup_plan, request)
                 chat_history.append({"role": "tool_followup", "content": str(followup_result)})
@@ -103,9 +105,15 @@ class Agent:
 
     def save_chat_history(self, chat_history):
         import os, json, datetime
+        # Persist the running history for future calls
+        memory.save_chat_history(chat_history)
+        # Also keep timestamped logs for debugging
         chat_dir = os.path.join(os.path.dirname(__file__), '../cache/chats')
         os.makedirs(chat_dir, exist_ok=True)
-        session_file = os.path.join(chat_dir, f'session_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
+        session_file = os.path.join(
+            chat_dir,
+            f'session_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        )
         with open(session_file, 'w') as f:
             json.dump(chat_history, f, indent=2)
 
