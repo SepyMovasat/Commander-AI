@@ -112,7 +112,7 @@ def run_agent_cli(agent, new_session=False):
                 result = agent.execute_plan(plan, user_input)
         # Step 3: Agentic follow-up (if needed)
         steps = 0
-        max_steps = 10
+        max_steps = 20
         while agent._should_continue(plan, result) and steps < max_steps:
             steps += 1
             with console.status(f"[bold cyan]Reasoning next step...[/bold cyan]", spinner="bouncingBall"):

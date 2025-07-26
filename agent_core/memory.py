@@ -8,6 +8,7 @@ import json
 MEMORY_FILE = os.path.join(os.path.dirname(__file__), '../cache/memory.json')
 NOTEPAD_FILE = os.path.join(os.path.dirname(__file__), '../cache/notepad.json')
 RAG_FILE = os.path.join(os.path.dirname(__file__), '../cache/rag.json')
+CHAT_HISTORY_FILE = os.path.join(os.path.dirname(__file__), '../cache/chat_history.json')
 
 def load_memory():
     if os.path.exists(MEMORY_FILE):
@@ -63,3 +64,15 @@ def rag_query(query: str):
             best = item["text"]
             best_score = score
     return best if best else "[No relevant memory found]"
+
+# Chat history persistence
+def load_chat_history():
+    if os.path.exists(CHAT_HISTORY_FILE):
+        with open(CHAT_HISTORY_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_chat_history(history):
+    os.makedirs(os.path.dirname(CHAT_HISTORY_FILE), exist_ok=True)
+    with open(CHAT_HISTORY_FILE, 'w') as f:
+        json.dump(history, f, indent=2)
