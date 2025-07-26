@@ -1,7 +1,7 @@
 """
 Agent core: Orchestrates tasks, manages memory, tool selection, and LLM interaction.
 """
-from models.llm import LLMManager
+from models.llm import LLMManager, TASK_END_TOKEN
 from modules import screen, input, file, web, command
 
 
@@ -43,8 +43,8 @@ class Agent:
         # Always return a string: just return the result (direct_answer, inquiry, etc.)
         if not chat_history or not result:
             return 'No response from AI.'
-        # If the plan/tool is 'none' return any final message
-        if plan.get('tool') == 'none':
+        # If the plan indicates task end or tool is 'none' return any final message
+        if plan.get('task_end') or plan.get('tool') == 'none':
             args = plan.get('args', {})
             if 'text' in args:
                 return args['text']
@@ -58,36 +58,47 @@ class Agent:
         if isinstance(plan, dict):
             return plan
         if isinstance(plan, str):
+            task_end = False
+            if TASK_END_TOKEN in plan:
+                task_end = True
+                plan = plan.replace(TASK_END_TOKEN, "")
             try:
                 # Try JSON first
-                return json.loads(plan.replace("'", '"'))
+                obj = json.loads(plan.replace("'", '"'))
             except Exception:
                 try:
                     # Try Python dict literal
-                    return ast.literal_eval(plan)
+                    obj = ast.literal_eval(plan)
                 except Exception:
-                    return {"tool": "none", "args": {}, "message": plan}
+                    obj = {"tool": "none", "args": {}, "message": plan.strip()}
+            if task_end:
+                obj['task_end'] = True
+            return obj
         return {"tool": "none", "args": {}, "message": str(plan)}
 
     def _should_continue(self, plan, result):
         # If the LLM says it's done, or the plan is 'none', stop. Otherwise, continue.
-        if not plan or plan.get('tool') == 'none':
+        if not plan:
             return False
-        # If the result contains a clear done/completion signal, stop.
+        if plan.get('task_end'):
+            return False
+        if plan.get('tool') == 'none':
+            return False
+        # If the result contains a clear done/completion signal or the token, stop.
         done_signals = ['done', 'complete', 'finished', 'no further action', 'task accomplished']
         if any(sig in str(result).lower() for sig in done_signals):
+            return False
+        if isinstance(result, str) and TASK_END_TOKEN.lower() in result.lower():
             return False
         return True
 
     def _agentic_followup_prompt(self, user_request, last_plan, last_result):
-        # Compose a prompt for the LLM to reason about the next step
+        """Prompt the LLM for the next action based on the last result."""
         return (
-            f"You are an autonomous AI agent. The user asked: '{user_request}'.\n"
-            f"You just executed the tool '{last_plan.get('tool')}' with result: {last_result}\n"
-            "Treat this tool result as a new message in the conversation."
-            " If the overall task is not yet complete, plan the next step as a single JSON object (tool+args). "
-            "When the task is fully done, provide your final summary and then return a JSON with tool:'none' and empty args. "
-            "Remember: output exactly one JSON object and nothing else."
+            f"Task: {user_request}\n"
+            f"Last tool '{last_plan.get('tool')}' returned: {last_result}\n"
+            "Reply with the next step as one JSON object. "
+            f"When finished with the entire task, append '{TASK_END_TOKEN}' to your final sentence and use tool:'none'."
         )
 
     def save_chat_history(self, chat_history):

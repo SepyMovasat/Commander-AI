@@ -9,6 +9,8 @@ import yaml
 import json
 import subprocess
 
+TASK_END_TOKEN = "TASK_END"
+
 class LLMManager:
     """
     Handles both local (Ollama) and OpenAI API LLMs for planning and tool-use.
@@ -194,59 +196,25 @@ class LLMManager:
             history_context += "\n"  # separate from the new request
 
         return f"""
-You are an AI agent operating in a REAL Linux environment with REAL consequences. This is not a simulation.
-CRITICAL: Never invent or imagine file paths, outputs, or responses - you are working with actual files and systems.
+You are a command-running agent on a real Linux machine. Follow the rules and use the tools provided.
 
 {tool_desc}
-{history_context}Focus only on the NEW user message below. Use conversation history and tool outputs just for reference, handling one message at a time.
+{history_context}User request: {request}
 
-USER REQUEST: {request}
-
-TASK EXECUTION FLOW:
-1. Begin every response with a short message from you.
-2. After your text, output EXACTLY ONE tool command as JSON.
-3. Continue executing one tool at a time until the task is fully complete.
-4. Make sure to use a tool in EVERY response until the task is truly complete.
-5. When the task is complete, write your final summary, then output {{"tool": "none", "args": {{}}}}.
-
-KEY POINTS:
-1. Don't stop until the task is actually finished
-2. Treat every tool result or user reply as a new message in the conversation (but not as a task)
-3. Each response = ONE tool command as JSON and your message MUST come before it
-4. Wait for real output before the next step
-5. Keep messages brief but informative
-6. Share progress updates in your text as needed
-
-Examples of good progress updates:
-✓ "I'll help you find large files in the system"
-✓ "Found potential large files, now checking their exact sizes"
-✓ "Complete! Found 3 files over 1GB: [actual file list]"
-
-❌ Too frequent:
-"Searching directory..."
-"Checking next directory..."
-"Moving to next folder..."
+Rules:
+1. Begin with a short progress sentence.
+2. After that, output ONE JSON tool command.
+3. Keep using tools step by step until the job is finished.
+4. When everything is done, append '{TASK_END_TOKEN}' to your last sentence and output {{"tool": "none", "args": {{}}}}.
 """
 
     def _system_prompt(self, api: bool) -> str:
         return (
-            "You are operating in a REAL Linux environment - not a simulation. "
-            "Follow these CRITICAL rules exactly:\n\n"
-            "CORE RULES:\n"
-            "1. Start every response with a short message from you.\n"
-            "2. After your message, output EXACTLY ONE tool command as JSON.\n"
-            "3. Never combine multiple actions - do one step at a time.\n"
-            "4. Do not invent tool names or argument names.\n"
-            "5. Provide progress updates in your text as needed.\n"
-            "6. Finish with a summary in your text, then output the JSON {\"tool\": \"none\", \"args\": {{}}} when done.\n"
-            "7. Use the 'none' tool only when no further action is needed.\n"
-            "8. Treat each user message as a NEW instruction; use chat history only as context.\n"
-            "9. Tool outputs appear as their own messages; don't confuse them with the user's request.\n"
-            "10. Always use a tool in every response until the task is complete.\n"
-            "11. Your short message must come BEFORE the JSON tool.\n\n"
-            "Example JSON:\n"
-            '{"tool": "tool_name", "args": {"arg_name": "value"}}\n\n'
-            "Always gather necessary information before acting."
+            f"You control a real Linux machine. Follow these rules exactly:\n"
+            "1. Start with a brief progress note.\n"
+            "2. Output one JSON tool command after your note.\n"
+            "3. Use one tool per response until the job is done.\n"
+            f"4. When finished, append '{TASK_END_TOKEN}' to your last note and output {{\"tool\": \"none\", \"args\": {{}}}}.\n"
         )
 
     def _tool_description(self) -> str:
@@ -320,7 +288,11 @@ Examples of good progress updates:
         return ""
 
     def _parse_plan_from_output(self, output: str) -> dict:
-        """Extract a JSON plan and any accompanying text."""
+        """Extract a JSON plan and any accompanying text. Recognizes TASK_END tokens."""
+        task_end = False
+        if TASK_END_TOKEN in output:
+            task_end = True
+            output = output.replace(TASK_END_TOKEN, "").strip()
         try:
             start = output.find('{')
             end = output.rfind('}') + 1
@@ -329,7 +301,12 @@ Examples of good progress updates:
                 text = (output[:start] + output[end:]).strip()
                 if text:
                     plan['message'] = text
+                if task_end:
+                    plan['task_end'] = True
                 return plan
         except Exception:
             pass
-        return {"tool": "none", "args": {}, "message": output}
+        plan = {"tool": "none", "args": {}, "message": output}
+        if task_end:
+            plan['task_end'] = True
+        return plan

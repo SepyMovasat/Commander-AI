@@ -3,6 +3,7 @@ CLI interface for Commander AI
 """
 
 from prompt_toolkit import prompt
+from models.llm import TASK_END_TOKEN
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -15,7 +16,6 @@ from rich import box
 import os
 import glob
 import shutil
-from prompt_toolkit import prompt
 
 console = Console()
 
@@ -255,5 +255,7 @@ def clean_output(text):
     lines = [l for l in lines if not l.strip().lower().startswith('prompt:')]
     # Remove empty lines
     lines = [l for l in lines if l.strip()]
+    # Remove task end token
+    lines = [l.replace(TASK_END_TOKEN, '').strip() for l in lines]
     # Remove excessive whitespace
     return '\n'.join(lines)
